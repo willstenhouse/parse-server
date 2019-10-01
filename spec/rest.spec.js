@@ -82,6 +82,38 @@ describe('rest create', () => {
       });
   });
 
+  it('can use custom _id prefix', done => {
+    config.objectIdPrefixes = {
+      Foo: 'foo_',
+    };
+    rest
+      .create(config, auth.nobody(config), 'Foo', {})
+      .then(() => database.adapter.find('Foo', { fields: {} }, {}, {}))
+      .then(results => {
+        expect(results.length).toEqual(1);
+        const obj = results[0];
+        expect(typeof obj.objectId).toEqual('string');
+        expect(obj.objectId.length).toEqual(14);
+        done();
+      });
+  });
+
+  it('is backwards compatible when _id prefix is set on another class', done => {
+    config.objectIdPrefixes = {
+      Bar: 'bar_',
+    };
+    rest
+      .create(config, auth.nobody(config), 'Foo', {})
+      .then(() => database.adapter.find('Foo', { fields: {} }, {}, {}))
+      .then(results => {
+        expect(results.length).toEqual(1);
+        const obj = results[0];
+        expect(typeof obj.objectId).toEqual('string');
+        expect(obj.objectId.length).toEqual(10);
+        done();
+      });
+  });
+
   it('handles array, object, date', done => {
     const now = new Date();
     const obj = {

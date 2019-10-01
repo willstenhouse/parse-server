@@ -362,6 +362,16 @@ RestWrite.prototype.setRequiredFieldsIfNeeded = function() {
         }
       };
 
+      const assignObjectId = () => {
+        const objectId = cryptoUtils.newObjectId(this.config.objectIdSize);
+        if (!this.config.objectIdPrefixes) {
+          return objectId;
+        }
+        return this.config.objectIdPrefixes[this.className]
+          ? `${this.config.objectIdPrefixes[this.className]}${objectId}`
+          : objectId;
+      };
+
       // Add default fields
       this.data.updatedAt = this.updatedAt;
       if (!this.query) {
@@ -369,9 +379,7 @@ RestWrite.prototype.setRequiredFieldsIfNeeded = function() {
 
         // Only assign new objectId if we are creating new object
         if (!this.data.objectId) {
-          this.data.objectId = cryptoUtils.newObjectId(
-            this.config.objectIdSize
-          );
+          this.data.objectId = assignObjectId();
         }
         if (schema) {
           Object.keys(schema.fields).forEach(fieldName => {
