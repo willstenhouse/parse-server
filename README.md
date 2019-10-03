@@ -312,20 +312,6 @@ var server = ParseServer({
 });
 ```
 
-### Custom prefixes for object id's
-
-Use this setting to specify prefixes for class names. This example adds 'usr_' to object id's created in the _User class:
-
-```js
-var server = ParseServer({
-  ...otherOptions,
-  // optional settings for object id prefixes
-  objectIdPrefixes: {
-    '_User': 'usr_'
-  }
-});
-```
-
 You can also use other email adapters contributed by the community such as:
 - [parse-smtp-template (Multi Language and Multi Template)](https://www.npmjs.com/package/parse-smtp-template)
 - [parse-server-postmark-adapter](https://www.npmjs.com/package/parse-server-postmark-adapter)
