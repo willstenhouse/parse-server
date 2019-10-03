@@ -154,11 +154,12 @@ describe('rest create', () => {
         const obj = results[0];
         expect(typeof obj.objectId).toEqual('string');
         expect(obj.objectId.length).toEqual(14);
+        expect(obj.objectId.split('_')[0]).toEqual('foo');
         done();
       });
   });
 
-  it('is backwards compatible when _id prefix is set on another class', done => {
+  it('is compatible when _id prefix is set on another class', done => {
     config.objectIdPrefixes = {
       Bar: 'bar_',
     };
