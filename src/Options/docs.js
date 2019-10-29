@@ -46,7 +46,9 @@
  * @property {Boolean} mountGraphQL Mounts the GraphQL endpoint
  * @property {String} mountPath Mount path for the server, defaults to /parse
  * @property {Boolean} mountPlayground Mounts the GraphQL Playground - never use this option in production
+ * @property {Any} objectIdPrefixes Set a class name specific prefix for an object id, as stringified JSON
  * @property {Number} objectIdSize Sets the number of characters in generated object id's, default 10
+ * @property {Boolean} objectIdUseTime Use time based id instead of random id
  * @property {Any} passwordPolicy Password policy for enforcing password related rules
  * @property {String} playgroundPath Mount path for the GraphQL Playground, defaults to /playground
  * @property {Number} port The port to run the ParseServer, defaults to 1337.

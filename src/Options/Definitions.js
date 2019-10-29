@@ -250,11 +250,24 @@ module.exports.ParseServerOptions = {
     action: parsers.booleanParser,
     default: false,
   },
+  objectIdPrefixes: {
+    env: 'PARSE_SERVER_OBJECT_ID_PREFIXES',
+    help:
+      'Set a class name specific prefix for an object id, as stringified JSON',
+    action: parsers.objectParser,
+    default: [],
+  },
   objectIdSize: {
     env: 'PARSE_SERVER_OBJECT_ID_SIZE',
     help: "Sets the number of characters in generated object id's, default 10",
     action: parsers.numberParser('objectIdSize'),
     default: 10,
+  },
+  objectIdUseTime: {
+    env: 'PARSE_SERVER_OBJECT_ID_USE_TIME',
+    help: 'Use time based id instead of random id',
+    action: parsers.booleanParser,
+    default: false,
   },
   passwordPolicy: {
     env: 'PARSE_SERVER_PASSWORD_POLICY',
