@@ -47,7 +47,7 @@ export function newObjectId(
 
 // Returns a new random alphanumeric string suitable for object ID.
 export function newObjectTimeId(size: number = 8): string {
-  return `${uniqid()}${size > 0 ? randomString(size) : ''}`;
+  return `${uniqid.time()}${size > 0 ? randomString(size) : ''}`;
 }
 
 // Returns a new random hex string suitable for secure tokens.

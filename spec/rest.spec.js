@@ -92,7 +92,7 @@ describe('rest create', () => {
         expect(results.length).toEqual(1);
         const obj = results[0];
         expect(typeof obj.objectId).toEqual('string');
-        expect(obj.objectId.length).toEqual(24);
+        expect(obj.objectId.length).toEqual(16);
         done();
       });
   });
