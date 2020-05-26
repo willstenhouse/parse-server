@@ -142,6 +142,21 @@ describe('rest create', () => {
       });
   });
 
+  it('can use time base _id', done => {
+    config.objectIdSize = 8;
+    config.objectIdUseTime = true;
+    rest
+      .create(config, auth.nobody(config), 'Foo', {})
+      .then(() => database.adapter.find('Foo', { fields: {} }, {}, {}))
+      .then(results => {
+        expect(results.length).toEqual(1);
+        const obj = results[0];
+        expect(typeof obj.objectId).toEqual('string');
+        expect(obj.objectId.length).toEqual(16);
+        done();
+      });
+  });
+
   it('can use custom _id prefix', done => {
     config.objectIdPrefixes = {
       Foo: 'foo_',
@@ -153,7 +168,6 @@ describe('rest create', () => {
         expect(results.length).toEqual(1);
         const obj = results[0];
         expect(typeof obj.objectId).toEqual('string');
-        expect(obj.objectId.length).toEqual(14);
         expect(obj.objectId.split('_')[0]).toEqual('foo');
         done();
       });

@@ -388,7 +388,11 @@ RestWrite.prototype.setRequiredFieldsIfNeeded = function() {
       };
 
       const assignObjectId = () => {
-        const objectId = cryptoUtils.newObjectId(this.config.objectIdSize);
+        const objectId = cryptoUtils.newObjectId(
+          this.config.objectIdSize,
+          this.config.objectIdUseTime
+        );
+
         if (!this.config.objectIdPrefixes) {
           return objectId;
         }
