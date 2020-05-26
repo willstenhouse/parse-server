@@ -76,7 +76,7 @@ describe('newObjectId', () => {
   });
 
   it('returns result with time based id', () => {
-    expect(cryptoUtils.newObjectId(8, true).length).toBe(24);
+    expect(cryptoUtils.newObjectId(8, true).length).toBe(16);
   });
 });
 
