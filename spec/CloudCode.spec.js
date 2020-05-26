@@ -5,6 +5,19 @@ const request = require('../lib/request');
 const InMemoryCacheAdapter = require('../lib/Adapters/Cache/InMemoryCacheAdapter')
   .InMemoryCacheAdapter;
 
+const mockAdapter = {
+  createFile: async (filename) => ({
+    name: filename,
+    location: `http://www.somewhere.com/${filename}`,
+  }),
+  deleteFile: () => {},
+  getFileData: () => {},
+  getFileLocation: (config, filename) => `http://www.somewhere.com/${filename}`,
+  validateFilename: () => {
+    return null;
+  },
+};
+
 describe('Cloud Code', () => {
   it('can load absolute cloud code file', done => {
     reconfigureServer({
@@ -878,7 +891,10 @@ describe('Cloud Code', () => {
         url: 'https://some.url',
       }),
       array: ['a', 'b', 'c'],
-      arrayOfArray: [['a', 'b', 'c'], ['d', 'e', 'f']],
+      arrayOfArray: [
+        ['a', 'b', 'c'],
+        ['d', 'e', 'f'],
+      ],
     };
     Parse.Cloud.run('params', params).then(() => {
       done();
@@ -1763,8 +1779,15 @@ describe('beforeFind hooks', () => {
       expect(jsonQuery.where.key).toEqual('value');
       expect(jsonQuery.where.some).toEqual({ $gt: 10 });
       expect(jsonQuery.include).toEqual('otherKey,otherValue');
+      expect(jsonQuery.excludeKeys).toBe('exclude');
       expect(jsonQuery.limit).toEqual(100);
       expect(jsonQuery.skip).toBe(undefined);
+      expect(jsonQuery.order).toBe('key');
+      expect(jsonQuery.keys).toBe('select');
+      expect(jsonQuery.readPreference).toBe('PRIMARY');
+      expect(jsonQuery.includeReadPreference).toBe('SECONDARY');
+      expect(jsonQuery.subqueryReadPreference).toBe('SECONDARY_PREFERRED');
+
       expect(req.isGet).toEqual(false);
     });
 
@@ -1773,6 +1796,10 @@ describe('beforeFind hooks', () => {
     query.greaterThan('some', 10);
     query.include('otherKey');
     query.include('otherValue');
+    query.ascending('key');
+    query.select('select');
+    query.exclude('exclude');
+    query.readPreference('PRIMARY', 'SECONDARY', 'SECONDARY_PREFERRED');
     query.find().then(() => {
       done();
     });
@@ -1822,6 +1849,25 @@ describe('beforeFind hooks', () => {
         done();
       });
     });
+  });
+
+  it('should use the modified exclude query', async () => {
+    Parse.Cloud.beforeFind('MyObject', req => {
+      const q = req.query;
+      q.exclude('number');
+    });
+
+    const obj = new Parse.Object('MyObject');
+    obj.set('number', 100);
+    obj.set('string', 'hello');
+    await obj.save();
+
+    const query = new Parse.Query('MyObject');
+    query.equalTo('objectId', obj.id);
+    const results = await query.find();
+    expect(results.length).toBe(1);
+    expect(results[0].get('number')).toBeUndefined();
+    expect(results[0].get('string')).toBe('hello');
   });
 
   it('should reject queries', done => {
@@ -2219,10 +2265,14 @@ describe('afterFind hooks', () => {
   it('should validate triggers correctly', () => {
     expect(() => {
       Parse.Cloud.beforeSave('_Session', () => {});
-    }).toThrow('Triggers are not supported for _Session class.');
+    }).toThrow(
+      'Only the afterLogout trigger is allowed for the _Session class.'
+    );
     expect(() => {
       Parse.Cloud.afterSave('_Session', () => {});
-    }).toThrow('Triggers are not supported for _Session class.');
+    }).toThrow(
+      'Only the afterLogout trigger is allowed for the _Session class.'
+    );
     expect(() => {
       Parse.Cloud.beforeSave('_PushStatus', () => {});
     }).toThrow('Only afterSave is allowed on _PushStatus');
@@ -2232,21 +2282,59 @@ describe('afterFind hooks', () => {
     expect(() => {
       Parse.Cloud.beforeLogin(() => {});
     }).not.toThrow(
-      'Only the _User class is allowed for the beforeLogin trigger'
+      'Only the _User class is allowed for the beforeLogin and afterLogin triggers'
     );
     expect(() => {
       Parse.Cloud.beforeLogin('_User', () => {});
     }).not.toThrow(
-      'Only the _User class is allowed for the beforeLogin trigger'
+      'Only the _User class is allowed for the beforeLogin and afterLogin triggers'
     );
     expect(() => {
       Parse.Cloud.beforeLogin(Parse.User, () => {});
     }).not.toThrow(
-      'Only the _User class is allowed for the beforeLogin trigger'
+      'Only the _User class is allowed for the beforeLogin and afterLogin triggers'
     );
     expect(() => {
       Parse.Cloud.beforeLogin('SomeClass', () => {});
-    }).toThrow('Only the _User class is allowed for the beforeLogin trigger');
+    }).toThrow(
+      'Only the _User class is allowed for the beforeLogin and afterLogin triggers'
+    );
+    expect(() => {
+      Parse.Cloud.afterLogin(() => {});
+    }).not.toThrow(
+      'Only the _User class is allowed for the beforeLogin and afterLogin triggers'
+    );
+    expect(() => {
+      Parse.Cloud.afterLogin('_User', () => {});
+    }).not.toThrow(
+      'Only the _User class is allowed for the beforeLogin and afterLogin triggers'
+    );
+    expect(() => {
+      Parse.Cloud.afterLogin(Parse.User, () => {});
+    }).not.toThrow(
+      'Only the _User class is allowed for the beforeLogin and afterLogin triggers'
+    );
+    expect(() => {
+      Parse.Cloud.afterLogin('SomeClass', () => {});
+    }).toThrow(
+      'Only the _User class is allowed for the beforeLogin and afterLogin triggers'
+    );
+    expect(() => {
+      Parse.Cloud.afterLogout(() => {});
+    }).not.toThrow();
+    expect(() => {
+      Parse.Cloud.afterLogout('_Session', () => {});
+    }).not.toThrow();
+    expect(() => {
+      Parse.Cloud.afterLogout('_User', () => {});
+    }).toThrow(
+      'Only the _Session class is allowed for the afterLogout trigger.'
+    );
+    expect(() => {
+      Parse.Cloud.afterLogout('SomeClass', () => {});
+    }).toThrow(
+      'Only the _Session class is allowed for the afterLogout trigger.'
+    );
   });
 
   it('should skip afterFind hooks for aggregate', done => {
@@ -2436,6 +2524,22 @@ describe('beforeLogin hook', () => {
     done();
   });
 
+  it('should trigger afterLogout hook on logout', async done => {
+    let userId;
+    Parse.Cloud.afterLogout(req => {
+      expect(req.object.className).toEqual('_Session');
+      expect(req.object.id).toBeDefined();
+      const user = req.object.get('user');
+      expect(user).toBeDefined();
+      userId = user.id;
+    });
+
+    const user = await Parse.User.signUp('user', 'pass');
+    await Parse.User.logOut();
+    expect(user.id).toBe(userId);
+    done();
+  });
+
   it('should have expected data in request', async done => {
     Parse.Cloud.beforeLogin(req => {
       expect(req.object).toBeDefined();
@@ -2449,5 +2553,375 @@ describe('beforeLogin hook', () => {
     await Parse.User.signUp('tupac', 'shakur');
     await Parse.User.logIn('tupac', 'shakur');
     done();
+  });
+
+  it('afterFind should not be triggered when saving an object', async () => {
+    let beforeSaves = 0;
+    Parse.Cloud.beforeSave('SavingTest', () => {
+      beforeSaves++;
+    });
+
+    let afterSaves = 0;
+    Parse.Cloud.afterSave('SavingTest', () => {
+      afterSaves++;
+    });
+
+    let beforeFinds = 0;
+    Parse.Cloud.beforeFind('SavingTest', () => {
+      beforeFinds++;
+    });
+
+    let afterFinds = 0;
+    Parse.Cloud.afterFind('SavingTest', () => {
+      afterFinds++;
+    });
+
+    const obj = new Parse.Object('SavingTest');
+    obj.set('someField', 'some value 1');
+    await obj.save();
+
+    expect(beforeSaves).toEqual(1);
+    expect(afterSaves).toEqual(1);
+    expect(beforeFinds).toEqual(0);
+    expect(afterFinds).toEqual(0);
+
+    obj.set('someField', 'some value 2');
+    await obj.save();
+
+    expect(beforeSaves).toEqual(2);
+    expect(afterSaves).toEqual(2);
+    expect(beforeFinds).toEqual(0);
+    expect(afterFinds).toEqual(0);
+
+    await obj.fetch();
+
+    expect(beforeSaves).toEqual(2);
+    expect(afterSaves).toEqual(2);
+    expect(beforeFinds).toEqual(1);
+    expect(afterFinds).toEqual(1);
+
+    obj.set('someField', 'some value 3');
+    await obj.save();
+
+    expect(beforeSaves).toEqual(3);
+    expect(afterSaves).toEqual(3);
+    expect(beforeFinds).toEqual(1);
+    expect(afterFinds).toEqual(1);
+  });
+
+  it('beforeSaveFile should not change file if nothing is returned', async () => {
+    await reconfigureServer({ filesAdapter: mockAdapter });
+    Parse.Cloud.beforeSaveFile(() => {
+      return;
+    });
+    const file = new Parse.File('popeye.txt', [1, 2, 3], 'text/plain');
+    const result = await file.save({ useMasterKey: true });
+    expect(result).toBe(file);
+  });
+
+  it('beforeSaveFile should return file that is already saved and not save anything to files adapter', async () => {
+    await reconfigureServer({ filesAdapter: mockAdapter });
+    const createFileSpy = spyOn(mockAdapter, 'createFile').and.callThrough();
+    Parse.Cloud.beforeSaveFile(() => {
+      const newFile = new Parse.File('some-file.txt');
+      newFile._url = 'http://www.somewhere.com/parse/files/some-app-id/some-file.txt';
+      return newFile;
+    });
+    const file = new Parse.File('popeye.txt', [1, 2, 3], 'text/plain');
+    const result = await file.save({ useMasterKey: true });
+    expect(result).toBe(file);
+    expect(result._name).toBe('some-file.txt');
+    expect(result._url).toBe('http://www.somewhere.com/parse/files/some-app-id/some-file.txt');
+    expect(createFileSpy).not.toHaveBeenCalled();
+  });
+
+  it('beforeSaveFile should throw error', async () => {
+    await reconfigureServer({ filesAdapter: mockAdapter });
+    Parse.Cloud.beforeSaveFile(() => {
+      throw new Parse.Error(400, 'some-error-message');
+    });
+    const file = new Parse.File('popeye.txt', [1, 2, 3], 'text/plain');
+    try {
+      await file.save({ useMasterKey: true });
+    } catch (error) {
+      expect(error.message).toBe('some-error-message');
+    }
+  });
+
+  it('beforeSaveFile should change values of uploaded file by editing fileObject directly', async () => {
+    await reconfigureServer({ filesAdapter: mockAdapter });
+    const createFileSpy = spyOn(mockAdapter, 'createFile').and.callThrough();
+    Parse.Cloud.beforeSaveFile(async (req) => {
+      expect(req.triggerName).toEqual('beforeSaveFile');
+      expect(req.master).toBe(true);
+      req.file.addMetadata('foo', 'bar');
+      req.file.addTag('tagA', 'some-tag');
+    });
+    const file = new Parse.File('popeye.txt', [1, 2, 3], 'text/plain');
+    const result = await file.save({ useMasterKey: true });
+    expect(result).toBe(file);
+    const newData = new Buffer([1, 2, 3]);
+    const newOptions = {
+      tags: {
+        tagA: 'some-tag',
+      },
+      metadata: {
+        foo: 'bar',
+      },
+    };
+    expect(createFileSpy).toHaveBeenCalledWith(jasmine.any(String), newData, 'text/plain', newOptions);
+  });
+
+  it('beforeSaveFile should change values by returning new fileObject', async () => {
+    await reconfigureServer({ filesAdapter: mockAdapter });
+    const createFileSpy = spyOn(mockAdapter, 'createFile').and.callThrough();
+    Parse.Cloud.beforeSaveFile(async (req) => {
+      expect(req.triggerName).toEqual('beforeSaveFile');
+      expect(req.fileSize).toBe(3);
+      const newFile = new Parse.File('donald_duck.pdf', [4, 5, 6], 'application/pdf');
+      newFile.setMetadata({ foo: 'bar' });
+      newFile.setTags({ tagA: 'some-tag' });
+      return newFile;
+    });
+    const file = new Parse.File('popeye.txt', [1, 2, 3], 'text/plain');
+    const result = await file.save({ useMasterKey: true });
+    expect(result).toBeInstanceOf(Parse.File);
+    const newData = new Buffer([4, 5, 6]);
+    const newContentType = 'application/pdf';
+    const newOptions = {
+      tags: {
+        tagA: 'some-tag',
+      },
+      metadata: {
+        foo: 'bar',
+      },
+    };
+    expect(createFileSpy).toHaveBeenCalledWith(jasmine.any(String), newData, newContentType, newOptions);
+    const expectedFileName = 'donald_duck.pdf';
+    expect(file._name.indexOf(expectedFileName)).toBe(file._name.length - expectedFileName.length);
+  });
+
+  it('beforeSaveFile should contain metadata and tags saved from client', async () => {
+    await reconfigureServer({ filesAdapter: mockAdapter });
+    const createFileSpy = spyOn(mockAdapter, 'createFile').and.callThrough();
+    Parse.Cloud.beforeSaveFile(async (req) => {
+      expect(req.triggerName).toEqual('beforeSaveFile');
+      expect(req.fileSize).toBe(3);
+      expect(req.file).toBeInstanceOf(Parse.File);
+      expect(req.file.name()).toBe('popeye.txt');
+      expect(req.file.metadata()).toEqual({ foo: 'bar' });
+      expect(req.file.tags()).toEqual({ bar: 'foo' });
+    });
+    const file = new Parse.File('popeye.txt', [1, 2, 3], 'text/plain');
+    file.setMetadata({ foo: 'bar' });
+    file.setTags({ bar: 'foo' });
+    const result = await file.save({ useMasterKey: true });
+    expect(result).toBeInstanceOf(Parse.File);
+    const options = {
+      metadata: { foo: 'bar' },
+      tags: { bar: 'foo' },
+    };
+    expect(createFileSpy).toHaveBeenCalledWith(jasmine.any(String), jasmine.any(Buffer), 'text/plain', options);
+  });
+
+  it('beforeSaveFile should return same file data with new file name', async () => {
+    await reconfigureServer({ filesAdapter: mockAdapter });
+    const config = Config.get('test');
+    config.filesController.options.preserveFileName = true;
+    Parse.Cloud.beforeSaveFile(async ({ file }) => {
+      expect(file.name()).toBe('popeye.txt');
+      const fileData = await file.getData();
+      const newFile = new Parse.File('2020-04-01.txt', { base64: fileData });
+      return newFile;
+    });
+    const file = new Parse.File('popeye.txt', [1, 2, 3], 'text/plain');
+    const result = await file.save({ useMasterKey: true });
+    expect(result.name()).toBe('2020-04-01.txt');
+  });
+
+  it('afterSaveFile should set fileSize to null if beforeSave returns an already saved file', async () => {
+    await reconfigureServer({ filesAdapter: mockAdapter });
+    const createFileSpy = spyOn(mockAdapter, 'createFile').and.callThrough();
+    Parse.Cloud.beforeSaveFile((req) => {
+      expect(req.fileSize).toBe(3);
+      const newFile = new Parse.File('some-file.txt');
+      newFile._url = 'http://www.somewhere.com/parse/files/some-app-id/some-file.txt';
+      return newFile;
+    });
+    Parse.Cloud.afterSaveFile((req) => {
+      expect(req.fileSize).toBe(null);
+    });
+    const file = new Parse.File('popeye.txt', [1, 2, 3], 'text/plain');
+    const result = await file.save({ useMasterKey: true });
+    expect(result).toBe(result);
+    expect(result._name).toBe('some-file.txt');
+    expect(result._url).toBe('http://www.somewhere.com/parse/files/some-app-id/some-file.txt');
+    expect(createFileSpy).not.toHaveBeenCalled();
+  });
+
+  it('afterSaveFile should throw error', async () => {
+    await reconfigureServer({ filesAdapter: mockAdapter });
+    Parse.Cloud.afterSaveFile(async () => {
+      throw new Parse.Error(400, 'some-error-message');
+    });
+    const filename = 'donald_duck.pdf';
+    const file = new Parse.File(filename, [1, 2, 3], 'text/plain');
+    try {
+      await file.save({ useMasterKey: true });
+    } catch (error) {
+      expect(error.message).toBe('some-error-message');
+    }
+  });
+
+  it('afterSaveFile should call with fileObject', async (done) => {
+    await reconfigureServer({ filesAdapter: mockAdapter });
+    Parse.Cloud.beforeSaveFile(async (req) => {
+      req.file.setTags({ tagA: 'some-tag' });
+      req.file.setMetadata({ foo: 'bar' });
+    });
+    Parse.Cloud.afterSaveFile(async (req) => {
+      expect(req.master).toBe(true);
+      expect(req.file._tags).toEqual({ tagA: 'some-tag' });
+      expect(req.file._metadata).toEqual({ foo: 'bar' });
+      done();
+    });
+    const file = new Parse.File('popeye.txt', [1, 2, 3], 'text/plain');
+    await file.save({ useMasterKey: true });
+  });
+
+  it('afterSaveFile should change fileSize when file data changes', async (done) => {
+    await reconfigureServer({ filesAdapter: mockAdapter });
+    Parse.Cloud.beforeSaveFile(async (req) => {
+      expect(req.fileSize).toBe(3);
+      expect(req.master).toBe(true);
+      const newFile = new Parse.File('donald_duck.pdf', [4, 5, 6, 7, 8, 9], 'application/pdf');
+      return newFile;
+    });
+    Parse.Cloud.afterSaveFile(async (req) => {
+      expect(req.fileSize).toBe(6);
+      expect(req.master).toBe(true);
+      done();
+    });
+    const file = new Parse.File('popeye.txt', [1, 2, 3], 'text/plain');
+    await file.save({ useMasterKey: true });
+  });
+
+  it('beforeDeleteFile should call with fileObject', async () => {
+    await reconfigureServer({ filesAdapter: mockAdapter });
+    Parse.Cloud.beforeDeleteFile((req) => {
+      expect(req.file).toBeInstanceOf(Parse.File);
+      expect(req.file._name).toEqual('popeye.txt');
+      expect(req.file._url).toEqual('http://www.somewhere.com/popeye.txt');
+      expect(req.fileSize).toBe(null);
+    });
+    const file = new Parse.File('popeye.txt');
+    await file.destroy({ useMasterKey: true });
+  });
+
+  it('beforeDeleteFile should throw error', async (done) => {
+    await reconfigureServer({ filesAdapter: mockAdapter });
+    Parse.Cloud.beforeDeleteFile(() => {
+      throw new Error('some error message');
+    });
+    const file = new Parse.File('popeye.txt');
+    try {
+      await file.destroy({ useMasterKey: true });
+    } catch (error) {
+      expect(error.message).toBe('some error message');
+      done();
+    }
+  })
+
+  it('afterDeleteFile should call with fileObject', async (done) => {
+    await reconfigureServer({ filesAdapter: mockAdapter });
+    Parse.Cloud.beforeDeleteFile((req) => {
+      expect(req.file).toBeInstanceOf(Parse.File);
+      expect(req.file._name).toEqual('popeye.txt');
+      expect(req.file._url).toEqual('http://www.somewhere.com/popeye.txt');
+    });
+    Parse.Cloud.afterDeleteFile((req) => {
+      expect(req.file).toBeInstanceOf(Parse.File);
+      expect(req.file._name).toEqual('popeye.txt');
+      expect(req.file._url).toEqual('http://www.somewhere.com/popeye.txt');
+      done();
+    });
+    const file = new Parse.File('popeye.txt');
+    await file.destroy({ useMasterKey: true });
+  });
+});
+
+describe('afterLogin hook', () => {
+  it('should run afterLogin after successful login', async done => {
+    let hit = 0;
+    Parse.Cloud.afterLogin(req => {
+      hit++;
+      expect(req.object.get('username')).toEqual('testuser');
+    });
+
+    await Parse.User.signUp('testuser', 'p@ssword');
+    const user = await Parse.User.logIn('testuser', 'p@ssword');
+    expect(hit).toBe(1);
+    expect(user).toBeDefined();
+    expect(user.getUsername()).toBe('testuser');
+    expect(user.getSessionToken()).toBeDefined();
+    done();
+  });
+
+  it('should not run afterLogin after unsuccessful login', async done => {
+    let hit = 0;
+    Parse.Cloud.afterLogin(req => {
+      hit++;
+      expect(req.object.get('username')).toEqual('testuser');
+    });
+
+    await Parse.User.signUp('testuser', 'p@ssword');
+    try {
+      await Parse.User.logIn('testuser', 'badpassword');
+    } catch (e) {
+      expect(e.code).toBe(Parse.Error.OBJECT_NOT_FOUND);
+    }
+    expect(hit).toBe(0);
+    done();
+  });
+
+  it('should not run afterLogin on sign up', async done => {
+    let hit = 0;
+    Parse.Cloud.afterLogin(req => {
+      hit++;
+      expect(req.object.get('username')).toEqual('testuser');
+    });
+
+    const user = await Parse.User.signUp('testuser', 'p@ssword');
+    expect(user).toBeDefined();
+    expect(hit).toBe(0);
+    done();
+  });
+
+  it('should have expected data in request', async done => {
+    Parse.Cloud.afterLogin(req => {
+      expect(req.object).toBeDefined();
+      expect(req.user).toBeDefined();
+      expect(req.headers).toBeDefined();
+      expect(req.ip).toBeDefined();
+      expect(req.installationId).toBeDefined();
+      expect(req.context).toBeUndefined();
+    });
+
+    await Parse.User.signUp('testuser', 'p@ssword');
+    await Parse.User.logIn('testuser', 'p@ssword');
+    done();
+  });
+
+  it('should have access to context as save argument', async () => {
+    // Declare triggers
+    Parse.Cloud.beforeSave('TestObject', (req) => {
+      expect(req.context.a).toEqual('a');
+    });
+    Parse.Cloud.afterSave('TestObject', (req) => {
+      expect(req.context.a).toEqual('a');
+    });
+    // Save object
+    const obj = new TestObject();
+    await obj.save(null, { context: { a: 'a' } });
   });
 });

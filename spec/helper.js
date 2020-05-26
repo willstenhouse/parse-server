@@ -18,6 +18,7 @@ if (global._babelPolyfill) {
   console.error('We should not use polyfilled tests');
   process.exit(1);
 }
+process.noDeprecation = true;
 
 const cache = require('../lib/cache').default;
 const ParseServer = require('../lib/index').ParseServer;
@@ -206,13 +207,7 @@ afterEach(function(done) {
         'There were open connections to the server left after the test finished'
       );
     }
-    on_db(
-      'postgres',
-      () => {
-        TestUtils.destroyAllDataPermanently(true).then(done, done);
-      },
-      done
-    );
+    TestUtils.destroyAllDataPermanently(true).then(done, done);
   };
   Parse.Cloud._removeAllHooks();
   databaseAdapter
@@ -243,7 +238,10 @@ afterEach(function(done) {
       });
     })
     .then(() => Parse.User.logOut())
-    .then(() => {}, () => {}) // swallow errors
+    .then(
+      () => {},
+      () => {}
+    ) // swallow errors
     .then(() => {
       // Connection close events are not immediate on node 10+... wait a bit
       return new Promise(resolve => {

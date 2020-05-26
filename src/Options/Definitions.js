@@ -17,6 +17,12 @@ module.exports.ParseServerOptions = {
     action: parsers.booleanParser,
     default: true,
   },
+  allowCustomObjectId: {
+    env: 'PARSE_SERVER_ALLOW_CUSTOM_OBJECT_ID',
+    help: 'Enable (or disable) custom objectId',
+    action: parsers.booleanParser,
+    default: false,
+  },
   allowHeaders: {
     env: 'PARSE_SERVER_ALLOW_HEADERS',
     help: 'Add headers to Access-Control-Allow-Headers',
@@ -224,6 +230,12 @@ module.exports.ParseServerOptions = {
     help: 'Max value for limit option on queries, defaults to unlimited',
     action: parsers.numberParser('maxLimit'),
   },
+  maxLogFiles: {
+    env: 'PARSE_SERVER_MAX_LOG_FILES',
+    help:
+      "Maximum number of logs to keep. If not set, no logs will be removed. This can be a number of files or number of days. If using days, add 'd' as the suffix. (default: null)",
+    action: parsers.objectParser,
+  },
   maxUploadSize: {
     env: 'PARSE_SERVER_MAX_UPLOAD_SIZE',
     help: 'Max file size for uploads, defaults to 20mb',
@@ -371,12 +383,6 @@ module.exports.ParseServerOptions = {
     env: 'SILENT',
     help: 'Disables console output',
     action: parsers.booleanParser,
-  },
-  skipMongoDBServer13732Workaround: {
-    env: 'PARSE_SKIP_MONGODB_SERVER_13732_WORKAROUND',
-    help: 'Circumvent Parse workaround for historical MongoDB bug SERVER-13732',
-    action: parsers.booleanParser,
-    default: false,
   },
   startLiveQueryServer: {
     env: 'PARSE_SERVER_START_LIVE_QUERY_SERVER',

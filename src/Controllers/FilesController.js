@@ -1,9 +1,10 @@
 // FilesController.js
 import { randomHexString } from '../cryptoUtils';
 import AdaptableController from './AdaptableController';
-import { FilesAdapter } from '../Adapters/Files/FilesAdapter';
+import { validateFilename, FilesAdapter } from '../Adapters/Files/FilesAdapter';
 import path from 'path';
 import mime from 'mime';
+const Parse = require('parse').Parse;
 
 const legacyFilesRegex = new RegExp(
   '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}-.*'
@@ -14,7 +15,7 @@ export class FilesController extends AdaptableController {
     return this.adapter.getFileData(filename);
   }
 
-  createFile(config, filename, data, contentType) {
+  createFile(config, filename, data, contentType, options) {
     const extname = path.extname(filename);
 
     const hasExtension = extname.length > 0;
@@ -30,16 +31,25 @@ export class FilesController extends AdaptableController {
     }
 
     const location = this.adapter.getFileLocation(config, filename);
-    return this.adapter.createFile(filename, data, contentType).then(() => {
-      return Promise.resolve({
-        url: location,
-        name: filename,
+    return this.adapter
+      .createFile(filename, data, contentType, options)
+      .then(() => {
+        return Promise.resolve({
+          url: location,
+          name: filename,
+        });
       });
-    });
   }
 
   deleteFile(config, filename) {
     return this.adapter.deleteFile(filename);
+  }
+
+  getMetadata(filename) {
+    if (typeof this.adapter.getMetadata === 'function') {
+      return this.adapter.getMetadata(filename);
+    }
+    return Promise.resolve({});
   }
 
   /**
@@ -49,7 +59,7 @@ export class FilesController extends AdaptableController {
    */
   expandFilesInObject(config, object) {
     if (object instanceof Array) {
-      object.map(obj => this.expandFilesInObject(config, obj));
+      object.map((obj) => this.expandFilesInObject(config, obj));
       return;
     }
     if (typeof object !== 'object') {
@@ -94,6 +104,17 @@ export class FilesController extends AdaptableController {
 
   handleFileStream(config, filename, req, res, contentType) {
     return this.adapter.handleFileStream(filename, req, res, contentType);
+  }
+
+  validateFilename(filename) {
+    if (typeof this.adapter.validateFilename === 'function') {
+      const error = this.adapter.validateFilename(filename);
+      if (typeof error !== 'string') {
+        return error;
+      }
+      return new Parse.Error(Parse.Error.INVALID_FILE_NAME, error);
+    }
+    return validateFilename(filename);
   }
 }
 

@@ -1,11 +1,12 @@
 const {
   ParseWebSocketServer,
 } = require('../lib/LiveQuery/ParseWebSocketServer');
+const EventEmitter = require('events');
 
 describe('ParseWebSocketServer', function() {
   beforeEach(function(done) {
     // Mock ws server
-    const EventEmitter = require('events');
+
     const mockServer = function() {
       return new EventEmitter();
     };
@@ -22,11 +23,11 @@ describe('ParseWebSocketServer', function() {
       onConnectCallback,
       { websocketTimeout: 5 }
     ).server;
-    const ws = {
-      readyState: 0,
-      OPEN: 0,
-      ping: jasmine.createSpy('ping'),
-    };
+    const ws = new EventEmitter();
+    ws.readyState = 0;
+    ws.OPEN = 0;
+    ws.ping = jasmine.createSpy('ping');
+
     parseWebSocketServer.onConnection(ws);
 
     // Make sure callback is called
@@ -37,6 +38,45 @@ describe('ParseWebSocketServer', function() {
       server.close();
       done();
     }, 10);
+  });
+
+  it('can handle error event', async () => {
+    jasmine.restoreLibrary('ws', 'Server');
+    const WebSocketServer = require('ws').Server;
+    let wssError;
+    class WSSAdapter {
+      constructor(options) {
+        this.options = options;
+      }
+      onListen() {}
+      onConnection() {}
+      onError() {}
+      start() {
+        const wss = new WebSocketServer({ server: this.options.server });
+        wss.on('listening', this.onListen);
+        wss.on('connection', this.onConnection);
+        wss.on('error', error => {
+          wssError = error;
+          this.onError(error);
+        });
+        this.wss = wss;
+      }
+    }
+
+    const server = await reconfigureServer({
+      liveQuery: {
+        classNames: ['TestObject'],
+      },
+      liveQueryServerOptions: {
+        wssAdapter: WSSAdapter,
+      },
+      startLiveQueryServer: true,
+      verbose: false,
+      silent: true,
+    });
+    const wssAdapter = server.liveQueryServer.parseWebSocketServer.server;
+    wssAdapter.wss.emit('error', 'Invalid Packet');
+    expect(wssError).toBe('Invalid Packet');
   });
 
   afterEach(function() {

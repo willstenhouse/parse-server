@@ -1,4 +1,5 @@
 import { GraphQLNonNull } from 'graphql';
+import { fromGlobalId } from 'graphql-relay';
 import getFieldNames from 'graphql-list-fields';
 import pluralize from 'pluralize';
 import * as defaultGraphQLTypes from './defaultGraphQLTypes';
@@ -7,22 +8,36 @@ import { ParseGraphQLClassConfig } from '../../Controllers/ParseGraphQLControlle
 import { transformClassNameToGraphQL } from '../transformers/className';
 import { extractKeysAndInclude } from '../parseGraphQLUtils';
 
-const getParseClassQueryConfig = function(
+const getParseClassQueryConfig = function (
   parseClassConfig: ?ParseGraphQLClassConfig
 ) {
   return (parseClassConfig && parseClassConfig.query) || {};
 };
 
-const getQuery = async (className, _source, args, context, queryInfo) => {
-  const { id, options } = args;
+const getQuery = async (
+  parseClass,
+  _source,
+  args,
+  context,
+  queryInfo,
+  parseClasses
+) => {
+  let { id } = args;
+  const { options } = args;
   const { readPreference, includeReadPreference } = options || {};
   const { config, auth, info } = context;
   const selectedFields = getFieldNames(queryInfo);
 
+  const globalIdObject = fromGlobalId(id);
+
+  if (globalIdObject.type === parseClass.className) {
+    id = globalIdObject.id;
+  }
+
   const { keys, include } = extractKeysAndInclude(selectedFields);
 
   return await objectsQueries.getObject(
-    className,
+    parseClass.className,
     id,
     keys,
     include,
@@ -30,11 +45,12 @@ const getQuery = async (className, _source, args, context, queryInfo) => {
     includeReadPreference,
     config,
     auth,
-    info
+    info,
+    parseClasses
   );
 };
 
-const load = function(
+const load = function (
   parseGraphQLSchema,
   parseClass,
   parseClassConfig: ?ParseGraphQLClassConfig
@@ -44,6 +60,8 @@ const load = function(
   const {
     get: isGetEnabled = true,
     find: isFindEnabled = true,
+    getAlias: getAlias = '',
+    findAlias: findAlias = '',
   } = getParseClassQueryConfig(parseClassConfig);
 
   const {
@@ -53,12 +71,15 @@ const load = function(
   } = parseGraphQLSchema.parseClassTypes[className];
 
   if (isGetEnabled) {
-    const getGraphQLQueryName =
+    const lowerCaseClassName =
       graphQLClassName.charAt(0).toLowerCase() + graphQLClassName.slice(1);
+
+    const getGraphQLQueryName = getAlias || lowerCaseClassName;
+
     parseGraphQLSchema.addGraphQLQuery(getGraphQLQueryName, {
       description: `The ${getGraphQLQueryName} query can be used to get an object of the ${graphQLClassName} class by its id.`,
       args: {
-        id: defaultGraphQLTypes.OBJECT_ID_ATT,
+        id: defaultGraphQLTypes.GLOBAL_OR_OBJECT_ID_ATT,
         options: defaultGraphQLTypes.READ_OPTIONS_ATT,
       },
       type: new GraphQLNonNull(
@@ -66,7 +87,14 @@ const load = function(
       ),
       async resolve(_source, args, context, queryInfo) {
         try {
-          return await getQuery(className, _source, args, context, queryInfo);
+          return await getQuery(
+            parseClass,
+            _source,
+            args,
+            context,
+            queryInfo,
+            parseGraphQLSchema.parseClasses
+          );
         } catch (e) {
           parseGraphQLSchema.handleError(e);
         }
@@ -75,18 +103,29 @@ const load = function(
   }
 
   if (isFindEnabled) {
-    const findGraphQLQueryName = pluralize(
-      graphQLClassName.charAt(0).toLowerCase() + graphQLClassName.slice(1)
-    );
+    const lowerCaseClassName =
+      graphQLClassName.charAt(0).toLowerCase() + graphQLClassName.slice(1);
+
+    const findGraphQLQueryName = findAlias || pluralize(lowerCaseClassName);
+
     parseGraphQLSchema.addGraphQLQuery(findGraphQLQueryName, {
       description: `The ${findGraphQLQueryName} query can be used to find objects of the ${graphQLClassName} class.`,
       args: classGraphQLFindArgs,
       type: new GraphQLNonNull(
-        classGraphQLFindResultType || defaultGraphQLTypes.FIND_RESULT
+        classGraphQLFindResultType || defaultGraphQLTypes.OBJECT
       ),
       async resolve(_source, args, context, queryInfo) {
         try {
-          const { where, order, skip, limit, options } = args;
+          const {
+            where,
+            order,
+            skip,
+            first,
+            after,
+            last,
+            before,
+            options,
+          } = args;
           const {
             readPreference,
             includeReadPreference,
@@ -97,8 +136,8 @@ const load = function(
 
           const { keys, include } = extractKeysAndInclude(
             selectedFields
-              .filter(field => field.includes('.'))
-              .map(field => field.slice(field.indexOf('.') + 1))
+              .filter((field) => field.startsWith('edges.node.'))
+              .map((field) => field.replace('edges.node.', ''))
           );
           const parseOrder = order && order.join(',');
 
@@ -107,7 +146,10 @@ const load = function(
             where,
             parseOrder,
             skip,
-            limit,
+            first,
+            after,
+            last,
+            before,
             keys,
             include,
             false,
@@ -117,8 +159,8 @@ const load = function(
             config,
             auth,
             info,
-            selectedFields.map(field => field.split('.', 1)[0]),
-            parseClass.fields
+            selectedFields,
+            parseGraphQLSchema.parseClasses
           );
         } catch (e) {
           parseGraphQLSchema.handleError(e);

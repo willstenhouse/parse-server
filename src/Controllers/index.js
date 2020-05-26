@@ -76,10 +76,18 @@ export function getLoggerController(
     logsFolder,
     verbose,
     logLevel,
+    maxLogFiles,
     silent,
     loggerAdapter,
   } = options;
-  const loggerOptions = { jsonLogs, logsFolder, verbose, logLevel, silent };
+  const loggerOptions = {
+    jsonLogs,
+    logsFolder,
+    verbose,
+    logLevel,
+    silent,
+    maxLogFiles,
+  };
   const loggerControllerAdapter = loadAdapter(
     loggerAdapter,
     WinstonLoggerAdapter,
@@ -163,7 +171,6 @@ export function getDatabaseController(
   const {
     databaseURI,
     databaseOptions,
-    skipMongoDBServer13732Workaround,
     collectionPrefix,
     schemaCacheTTL,
     enableSingleSchemaCache,
@@ -187,8 +194,7 @@ export function getDatabaseController(
   }
   return new DatabaseController(
     databaseAdapter,
-    new SchemaCache(cacheController, schemaCacheTTL, enableSingleSchemaCache),
-    skipMongoDBServer13732Workaround
+    new SchemaCache(cacheController, schemaCacheTTL, enableSingleSchemaCache)
   );
 }
 

@@ -264,6 +264,18 @@ export class UsersRouter extends ClassesRouter {
     user.sessionToken = sessionData.sessionToken;
 
     await createSession();
+
+    const afterLoginUser = Parse.User.fromJSON(
+      Object.assign({ className: '_User' }, user)
+    );
+    maybeRunTrigger(
+      TriggerTypes.afterLogin,
+      { ...req.auth, user: afterLoginUser },
+      afterLoginUser,
+      null,
+      req.config
+    );
+
     return { response: user };
   }
 
@@ -302,6 +314,7 @@ export class UsersRouter extends ClassesRouter {
                 records.results[0].objectId
               )
               .then(() => {
+                this._runAfterLogoutTrigger(req, records.results[0]);
                 return Promise.resolve(success);
               });
           }
@@ -309,6 +322,17 @@ export class UsersRouter extends ClassesRouter {
         });
     }
     return Promise.resolve(success);
+  }
+
+  _runAfterLogoutTrigger(req, session) {
+    // After logout trigger
+    maybeRunTrigger(
+      TriggerTypes.afterLogout,
+      req.auth,
+      Parse.Session.fromJSON(Object.assign({ className: '_Session' }, session)),
+      null,
+      req.config
+    );
   }
 
   _throwOnBadEmailConfig(req) {

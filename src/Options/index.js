@@ -10,6 +10,7 @@ import { WSSAdapter } from '../Adapters/WebSocketServer/WSSAdapter';
 // @flow
 type Adapter<T> = string | any | T;
 type NumberOrBoolean = number | boolean;
+type NumberOrString = number | string;
 type ProtectedFields = any;
 
 export interface ParseServerOptions {
@@ -51,6 +52,8 @@ export interface ParseServerOptions {
   verbose: ?boolean;
   /* Sets the level for logs */
   logLevel: ?string;
+  /* Maximum number of logs to keep. If not set, no logs will be removed. This can be a number of files or number of days. If using days, add 'd' as the suffix. (default: null) */
+  maxLogFiles: ?NumberOrString;
   /* Disables console output
   :ENV: SILENT */
   silent: ?boolean;
@@ -61,10 +64,6 @@ export interface ParseServerOptions {
   databaseOptions: ?any;
   /* Adapter module for the database */
   databaseAdapter: ?Adapter<StorageAdapter>;
-  /* Circumvent Parse workaround for historical MongoDB bug SERVER-13732
-  :ENV: PARSE_SKIP_MONGODB_SERVER_13732_WORKAROUND
-  :DEFAULT: false */
-  skipMongoDBServer13732Workaround: ?boolean;
   /* Full path to your cloud code main.js */
   cloud: ?string;
   /* A collection prefix for the classes
@@ -102,6 +101,10 @@ export interface ParseServerOptions {
   :ENV: PARSE_SERVER_ALLOW_CLIENT_CLASS_CREATION
   :DEFAULT: true */
   allowClientClassCreation: ?boolean;
+  /* Enable (or disable) custom objectId
+  :ENV: PARSE_SERVER_ALLOW_CUSTOM_OBJECT_ID
+  :DEFAULT: false */
+  allowCustomObjectId: ?boolean;
   /* Configuration for your authentication providers, as stringified JSON. See http://docs.parseplatform.org/parse-server/guide/#oauth-and-3rd-party-authentication
   :ENV: PARSE_SERVER_AUTH_PROVIDERS */
   auth: ?any;

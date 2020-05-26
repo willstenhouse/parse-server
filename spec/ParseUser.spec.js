@@ -12,6 +12,7 @@ const MongoStorageAdapter = require('../lib/Adapters/Storage/Mongo/MongoStorageA
 const request = require('../lib/request');
 const passwordCrypto = require('../lib/password');
 const Config = require('../lib/Config');
+const cryptoUtils = require('../lib/cryptoUtils');
 
 function verifyACL(user) {
   const ACL = user.getACL();
@@ -1246,6 +1247,32 @@ describe('Parse.User testing', () => {
     done();
   });
 
+  it('can not set authdata to null', async () => {
+    try {
+      const provider = getMockFacebookProvider();
+      Parse.User._registerAuthenticationProvider(provider);
+      const user = await Parse.User._logInWith('facebook');
+      user.set('authData', null);
+      await user.save();
+      fail();
+    } catch (e) {
+      expect(e.message).toBe('This authentication method is unsupported.');
+    }
+  });
+
+  it('ignore setting authdata to undefined', async () => {
+    const provider = getMockFacebookProvider();
+    Parse.User._registerAuthenticationProvider(provider);
+    const user = await Parse.User._logInWith('facebook');
+    user.set('authData', undefined);
+    await user.save();
+    let authData = user.get('authData');
+    expect(authData).toBe(undefined);
+    await user.fetch();
+    authData = user.get('authData');
+    expect(authData.facebook.id).toBeDefined();
+  });
+
   it('user authData should be available in cloudcode (#2342)', async done => {
     Parse.Cloud.define('checkLogin', req => {
       expect(req.user).not.toBeUndefined();
@@ -1494,6 +1521,24 @@ describe('Parse.User testing', () => {
     }
 
     expect(hit).toBe(1);
+    done();
+  });
+
+  it('logout with provider should call afterLogout trigger', async done => {
+    const provider = getMockFacebookProvider();
+    Parse.User._registerAuthenticationProvider(provider);
+
+    let userId;
+    Parse.Cloud.afterLogout(req => {
+      expect(req.object.className).toEqual('_Session');
+      expect(req.object.id).toBeDefined();
+      const user = req.object.get('user');
+      expect(user).toBeDefined();
+      userId = user.id;
+    });
+    const user = await Parse.User._logInWith('facebook');
+    await Parse.User.logOut();
+    expect(user.id).toBe(userId);
     done();
   });
 
@@ -2198,6 +2243,128 @@ describe('Parse.User testing', () => {
           done();
         }
       );
+  });
+
+  describe('case insensitive signup not allowed', () => {
+    it('signup should fail with duplicate case insensitive username with basic setter', async () => {
+      const user = new Parse.User();
+      user.set('username', 'test1');
+      user.set('password', 'test');
+      await user.signUp();
+
+      const user2 = new Parse.User();
+      user2.set('username', 'Test1');
+      user2.set('password', 'test');
+      await expectAsync(user2.signUp()).toBeRejectedWith(
+        new Parse.Error(
+          Parse.Error.USERNAME_TAKEN,
+          'Account already exists for this username.'
+        )
+      );
+    });
+
+    it('signup should fail with duplicate case insensitive username with field specific setter', async () => {
+      const user = new Parse.User();
+      user.setUsername('test1');
+      user.setPassword('test');
+      await user.signUp();
+
+      const user2 = new Parse.User();
+      user2.setUsername('Test1');
+      user2.setPassword('test');
+      await expectAsync(user2.signUp()).toBeRejectedWith(
+        new Parse.Error(
+          Parse.Error.USERNAME_TAKEN,
+          'Account already exists for this username.'
+        )
+      );
+    });
+
+    it('signup should fail with duplicate case insensitive email', async () => {
+      const user = new Parse.User();
+      user.setUsername('test1');
+      user.setPassword('test');
+      user.setEmail('test@example.com');
+      await user.signUp();
+
+      const user2 = new Parse.User();
+      user2.setUsername('test2');
+      user2.setPassword('test');
+      user2.setEmail('Test@Example.Com');
+      await expectAsync(user2.signUp()).toBeRejectedWith(
+        new Parse.Error(
+          Parse.Error.EMAIL_TAKEN,
+          'Account already exists for this email address.'
+        )
+      );
+    });
+
+    it('edit should fail with duplicate case insensitive email', async () => {
+      const user = new Parse.User();
+      user.setUsername('test1');
+      user.setPassword('test');
+      user.setEmail('test@example.com');
+      await user.signUp();
+
+      const user2 = new Parse.User();
+      user2.setUsername('test2');
+      user2.setPassword('test');
+      user2.setEmail('Foo@Example.Com');
+      await user2.signUp();
+
+      user2.setEmail('Test@Example.Com');
+      await expectAsync(user2.save()).toBeRejectedWith(
+        new Parse.Error(
+          Parse.Error.EMAIL_TAKEN,
+          'Account already exists for this email address.'
+        )
+      );
+    });
+
+    describe('anonymous users', () => {
+      beforeEach(() => {
+        const insensitiveCollisions = [
+          'abcdefghijklmnop',
+          'Abcdefghijklmnop',
+          'ABcdefghijklmnop',
+          'ABCdefghijklmnop',
+          'ABCDefghijklmnop',
+          'ABCDEfghijklmnop',
+          'ABCDEFghijklmnop',
+          'ABCDEFGhijklmnop',
+          'ABCDEFGHijklmnop',
+          'ABCDEFGHIjklmnop',
+          'ABCDEFGHIJklmnop',
+          'ABCDEFGHIJKlmnop',
+          'ABCDEFGHIJKLmnop',
+          'ABCDEFGHIJKLMnop',
+          'ABCDEFGHIJKLMnop',
+          'ABCDEFGHIJKLMNop',
+          'ABCDEFGHIJKLMNOp',
+          'ABCDEFGHIJKLMNOP',
+        ];
+
+        // need a bunch of spare random strings per api request
+        spyOn(cryptoUtils, 'randomString').and.returnValues(
+          ...insensitiveCollisions
+        );
+      });
+
+      it('should not fail on case insensitive matches', async () => {
+        const user1 = await Parse.AnonymousUtils.logIn();
+        const username1 = user1.get('username');
+
+        const user2 = await Parse.AnonymousUtils.logIn();
+        const username2 = user2.get('username');
+
+        expect(username1).not.toBeUndefined();
+        expect(username2).not.toBeUndefined();
+        expect(username1.toLowerCase()).toBe('abcdefghijklmnop');
+        expect(username2.toLowerCase()).toBe('abcdefghijklmnop');
+        expect(username2).not.toBe(username1);
+        expect(username2.toLowerCase()).toBe(username1.toLowerCase()); // this is redundant :).
+      });
+    });
   });
 
   it('user cannot update email to existing user', done => {
@@ -3924,4 +4091,29 @@ describe('Security Advisory GHSA-8w3j-g983-8jh5', function() {
       done();
     }
   );
+  it_only_db('mongo')('should ignore authData field', async () => {
+    // Add User to Database with authData
+    const database = Config.get(Parse.applicationId).database;
+    const collection = await database.adapter._adaptiveCollection('_User');
+    await collection.insertOne({
+      _id: '1234ABCDEF',
+      name: '<some_name>',
+      email: '<some_email>',
+      username: '<some_username>',
+      _hashed_password: '<some_password>',
+      _auth_data_custom: {
+        id: 'linkedID',
+      },
+      sessionToken: '<some_session_token>',
+      authData: null, // should ignore
+    });
+    const provider = {
+      getAuthType: () => 'custom',
+      restoreAuthentication: () => true,
+    };
+    Parse.User._registerAuthenticationProvider(provider);
+    const query = new Parse.Query(Parse.User);
+    const user = await query.get('1234ABCDEF', { useMasterKey: true });
+    expect(user.get('authData')).toEqual({ custom: { id: 'linkedID' } });
+  });
 });

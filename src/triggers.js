@@ -4,13 +4,21 @@ import { logger } from './logger';
 
 export const Types = {
   beforeLogin: 'beforeLogin',
+  afterLogin: 'afterLogin',
+  afterLogout: 'afterLogout',
   beforeSave: 'beforeSave',
   afterSave: 'afterSave',
   beforeDelete: 'beforeDelete',
   afterDelete: 'afterDelete',
   beforeFind: 'beforeFind',
   afterFind: 'afterFind',
+  beforeSaveFile: 'beforeSaveFile',
+  afterSaveFile: 'afterSaveFile',
+  beforeDeleteFile: 'beforeDeleteFile',
+  afterDeleteFile: 'afterDeleteFile',
 };
+
+const FileClassName = '@File';
 
 const baseStore = function() {
   const Validators = {};
@@ -32,20 +40,29 @@ const baseStore = function() {
 };
 
 function validateClassNameForTriggers(className, type) {
-  const restrictedClassNames = ['_Session'];
-  if (restrictedClassNames.indexOf(className) != -1) {
-    throw `Triggers are not supported for ${className} class.`;
-  }
   if (type == Types.beforeSave && className === '_PushStatus') {
     // _PushStatus uses undocumented nested key increment ops
     // allowing beforeSave would mess up the objects big time
     // TODO: Allow proper documented way of using nested increment ops
     throw 'Only afterSave is allowed on _PushStatus';
   }
-  if (type === Types.beforeLogin && className !== '_User') {
+  if (
+    (type === Types.beforeLogin || type === Types.afterLogin) &&
+    className !== '_User'
+  ) {
     // TODO: check if upstream code will handle `Error` instance rather
     // than this anti-pattern of throwing strings
-    throw 'Only the _User class is allowed for the beforeLogin trigger';
+    throw 'Only the _User class is allowed for the beforeLogin and afterLogin triggers';
+  }
+  if (type === Types.afterLogout && className !== '_Session') {
+    // TODO: check if upstream code will handle `Error` instance rather
+    // than this anti-pattern of throwing strings
+    throw 'Only the _Session class is allowed for the afterLogout trigger.';
+  }
+  if (className === '_Session' && type !== Types.afterLogout) {
+    // TODO: check if upstream code will handle `Error` instance rather
+    // than this anti-pattern of throwing strings
+    throw 'Only the afterLogout trigger is allowed for the _Session class.';
   }
   return className;
 }
@@ -111,6 +128,10 @@ export function addTrigger(type, className, handler, applicationId) {
   add(Category.Triggers, `${type}.${className}`, handler, applicationId);
 }
 
+export function addFileTrigger(type, handler, applicationId) {
+  add(Category.Triggers, `${type}.${FileClassName}`, handler, applicationId);
+}
+
 export function addLiveQueryEventHandler(handler, applicationId) {
   applicationId = applicationId || Parse.applicationId;
   _triggerStore[applicationId] = _triggerStore[applicationId] || baseStore();
@@ -134,6 +155,10 @@ export function getTrigger(className, triggerType, applicationId) {
     throw 'Missing ApplicationID';
   }
   return get(Category.Triggers, `${triggerType}.${className}`, applicationId);
+}
+
+export function getFileTrigger(type, applicationId) {
+  return getTrigger(FileClassName, type, applicationId);
 }
 
 export function triggerExists(
@@ -444,22 +469,14 @@ export function maybeRunQueryTrigger(
       restOptions,
     });
   }
+  const json = Object.assign({}, restOptions);
+  json.where = restWhere;
 
   const parseQuery = new Parse.Query(className);
-  if (restWhere) {
-    parseQuery._where = restWhere;
-  }
+  parseQuery.withJSON(json);
+
   let count = false;
   if (restOptions) {
-    if (restOptions.include && restOptions.include.length > 0) {
-      parseQuery._include = restOptions.include.split(',');
-    }
-    if (restOptions.skip) {
-      parseQuery._skip = restOptions.skip;
-    }
-    if (restOptions.limit) {
-      parseQuery._limit = restOptions.limit;
-    }
     count = !!restOptions.count;
   }
   const requestObject = getRequestQueryObject(
@@ -496,6 +513,14 @@ export function maybeRunQueryTrigger(
           restOptions = restOptions || {};
           restOptions.include = jsonQuery.include;
         }
+        if (jsonQuery.excludeKeys) {
+          restOptions = restOptions || {};
+          restOptions.excludeKeys = jsonQuery.excludeKeys;
+        }
+        if (jsonQuery.explain) {
+          restOptions = restOptions || {};
+          restOptions.explain = jsonQuery.explain;
+        }
         if (jsonQuery.keys) {
           restOptions = restOptions || {};
           restOptions.keys = jsonQuery.keys;
@@ -503,6 +528,10 @@ export function maybeRunQueryTrigger(
         if (jsonQuery.order) {
           restOptions = restOptions || {};
           restOptions.order = jsonQuery.order;
+        }
+        if (jsonQuery.hint) {
+          restOptions = restOptions || {};
+          restOptions.hint = jsonQuery.hint;
         }
         if (requestObject.readPreference) {
           restOptions = restOptions || {};
@@ -604,7 +633,8 @@ export function maybeRunTrigger(
         const promise = trigger(request);
         if (
           triggerType === Types.afterSave ||
-          triggerType === Types.afterDelete
+          triggerType === Types.afterDelete ||
+          triggerType === Types.afterLogin
         ) {
           logTriggerAfterHook(
             triggerType,
@@ -655,4 +685,62 @@ export function runLiveQueryEventHandlers(
     return;
   }
   _triggerStore[applicationId].LiveQuery.forEach(handler => handler(data));
+}
+
+export function getRequestFileObject(triggerType, auth, fileObject, config) {
+  const request = {
+    ...fileObject,
+    triggerName: triggerType,
+    master: false,
+    log: config.loggerController,
+    headers: config.headers,
+    ip: config.ip,
+  };
+
+  if (!auth) {
+    return request;
+  }
+  if (auth.isMaster) {
+    request['master'] = true;
+  }
+  if (auth.user) {
+    request['user'] = auth.user;
+  }
+  if (auth.installationId) {
+    request['installationId'] = auth.installationId;
+  }
+  return request;
+}
+
+export async function maybeRunFileTrigger(triggerType, fileObject, config, auth) {
+  const fileTrigger = getFileTrigger(triggerType, config.applicationId);
+  if (typeof fileTrigger === 'function') {
+    try {
+      const request = getRequestFileObject(
+        triggerType,
+        auth,
+        fileObject,
+        config
+      );
+      const result = await fileTrigger(request);
+      logTriggerSuccessBeforeHook(
+        triggerType,
+        'Parse.File',
+        { ...fileObject.file.toJSON(), fileSize: fileObject.fileSize },
+        result,
+        auth,
+      )
+      return result || fileObject;
+    } catch (error) {
+      logTriggerErrorBeforeHook(
+        triggerType,
+        'Parse.File',
+        { ...fileObject.file.toJSON(), fileSize: fileObject.fileSize },
+        auth,
+        error,
+      );
+      throw error;
+    }
+  }
+  return fileObject;
 }
