@@ -74,6 +74,10 @@ describe('newObjectId', () => {
   it('returns unique results', () => {
     expect(givesUniqueResults(() => cryptoUtils.newObjectId(), 100)).toBe(true);
   });
+
+  it('returns result with time based id', () => {
+    expect(cryptoUtils.newObjectId(8, true).length).toBe(16);
+  });
 });
 
 describe('newToken', () => {

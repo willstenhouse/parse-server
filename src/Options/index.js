@@ -170,6 +170,12 @@ export interface ParseServerOptions {
   /* Sets the number of characters in generated object id's, default 10
   :DEFAULT: 10 */
   objectIdSize: ?number;
+  /* Set a class name specific prefix for an object id, as stringified JSON
+  :DEFAULT: {} */
+  objectIdPrefixes: ?any;
+  /* Use time based id instead of random id
+  :DEFAULT: false */
+  objectIdUseTime: ?boolean;
   /* The port to run the ParseServer, defaults to 1337.
   :ENV: PORT
   :DEFAULT: 1337 */

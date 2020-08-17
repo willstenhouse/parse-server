@@ -1,6 +1,7 @@
 /* @flow */
 
 import { randomBytes, createHash } from 'crypto';
+import uniqid from 'uniqid';
 
 // Returns a new random hex string of the given even size.
 export function randomHexString(size: number): string {
@@ -34,8 +35,19 @@ export function randomString(size: number): string {
 }
 
 // Returns a new random alphanumeric string suitable for object ID.
-export function newObjectId(size: number = 10): string {
+export function newObjectId(
+  size: number = 10,
+  useTime: boolean = false
+): string {
+  if (useTime) {
+    return newObjectTimeId(size);
+  }
   return randomString(size);
+}
+
+// Returns a new random alphanumeric string suitable for object ID.
+export function newObjectTimeId(size: number = 8): string {
+  return `${uniqid.time()}${size > 0 ? randomString(size) : ''}`;
 }
 
 // Returns a new random hex string suitable for secure tokens.
