@@ -338,8 +338,7 @@ module.exports.ParseServerOptions = {
   },
   objectIdPrefixes: {
     env: 'PARSE_SERVER_OBJECT_ID_PREFIXES',
-    help:
-      'Set a class name specific prefix for an object id, as stringified JSON',
+    help: 'Set a class name specific prefix for an object id, as stringified JSON',
     action: parsers.objectParser,
     default: [],
   },
@@ -354,6 +353,13 @@ module.exports.ParseServerOptions = {
     help: 'Use time based id instead of random id',
     action: parsers.booleanParser,
     default: false,
+  },
+  pages: {
+    env: 'PARSE_SERVER_PAGES',
+    help:
+      'The options for pages such as password reset and email verification. Caution, this is an experimental feature that may not be appropriate for production.',
+    action: parsers.objectParser,
+    default: {},
   },
   passwordPolicy: {
     env: 'PARSE_SERVER_PASSWORD_POLICY',
