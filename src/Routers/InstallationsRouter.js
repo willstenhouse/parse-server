@@ -10,11 +10,8 @@ export class InstallationsRouter extends ClassesRouter {
   }
 
   handleFind(req) {
-    const body = Object.assign(
-      req.body,
-      ClassesRouter.JSONFromQuery(req.query)
-    );
-    const options = ClassesRouter.optionsFromBody(body);
+    const body = Object.assign(req.body, ClassesRouter.JSONFromQuery(req.query));
+    const options = ClassesRouter.optionsFromBody(body, req.config.defaultLimit);
     return rest
       .find(
         req.config,
