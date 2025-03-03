@@ -158,11 +158,6 @@
     "type": "opencollective",
     "url": "https://opencollective.com/parse-server"
   },
-  "husky": {
-    "hooks": {
-      "pre-commit": "lint-staged"
-    }
-  },
   "lint-staged": {
     "{src,spec}/{**/*,*}.js": [
       "prettier --write",
