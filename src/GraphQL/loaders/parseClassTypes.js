@@ -1,3 +1,4 @@
+/* eslint-disable indent */
 import {
   GraphQLID,
   GraphQLObjectType,
@@ -140,11 +141,7 @@ const load = (parseGraphQLSchema, parseClass, parseClassConfig: ?ParseGraphQLCla
               ...fields,
               [field]: {
                 description: `This is the object ${field}.`,
-                type:
-                  (className === '_User' && (field === 'username' || field === 'password')) ||
-                  parseClass.fields[field].required
-                    ? new GraphQLNonNull(type)
-                    : type,
+                type: parseClass.fields[field].required ? new GraphQLNonNull(type) : type,
               },
             };
           } else {
@@ -352,6 +349,14 @@ const load = (parseGraphQLSchema, parseClass, parseClassConfig: ?ParseGraphQLCla
   const parseObjectFields = {
     id: globalIdField(className, obj => obj.objectId),
     ...defaultGraphQLTypes.PARSE_OBJECT_FIELDS,
+    ...(className === '_User'
+      ? {
+          authDataResponse: {
+            description: `auth provider response when triggered on signUp/logIn.`,
+            type: defaultGraphQLTypes.OBJECT,
+          },
+        }
+      : {}),
   };
   const outputFields = () => {
     return classOutputFields.reduce((fields, field) => {
@@ -448,7 +453,7 @@ const load = (parseGraphQLSchema, parseClass, parseClassConfig: ?ParseGraphQLCla
             description: `Use Inline Fragment on Array to get results: https://graphql.org/learn/queries/#inline-fragments`,
             type: parseClass.fields[field].required ? new GraphQLNonNull(type) : type,
             async resolve(source) {
-              if (!source[field]) return null;
+              if (!source[field]) { return null; }
               return source[field].map(async elem => {
                 if (elem.className && elem.objectId && elem.__type === 'Object') {
                   return elem;
