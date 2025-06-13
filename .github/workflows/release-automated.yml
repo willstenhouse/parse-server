@@ -1,7 +1,7 @@
 name: release-automated
 on:
   push:
-    branches: [ release, alpha, beta, next-major, 'release-[0-9]+.x.x' ]
+    branches: [release, alpha, beta, next-major, 'release-[0-9]+.x.x']
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -25,7 +25,7 @@ jobs:
           path: ~/.npm
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
-              ${{ runner.os }}-node-
+            ${{ runner.os }}-node-
       - run: npm ci
       - run: npx semantic-release
         env:
@@ -100,7 +100,7 @@ jobs:
           path: ~/.npm
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
-              ${{ runner.os }}-node-
+            ${{ runner.os }}-node-
       - name: Generate Docs
         run: |
           echo $SOURCE_TAG

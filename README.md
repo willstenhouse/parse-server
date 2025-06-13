@@ -160,8 +160,8 @@ $ npm install -g parse-server mongodb-runner
 $ mongodb-runner start
 $ parse-server --appId APPLICATION_ID --masterKey MASTER_KEY --databaseURI mongodb://localhost/test
 ```
-***Note:*** *If installation with* `-g` *fails due to permission problems* (`npm ERR! code 'EACCES'`), *please refer to [this link](https://docs.npmjs.com/getting-started/fixing-npm-permissions).*
 
+**_Note:_** _If installation with_ `-g` _fails due to permission problems_ (`npm ERR! code 'EACCES'`), _please refer to [this link](https://docs.npmjs.com/getting-started/fixing-npm-permissions)._
 
 ### Docker Container
 
@@ -184,11 +184,74 @@ You can use any arbitrary string as your application id and master key. These wi
 
 That's it! You are now running a standalone version of Parse Server on your machine.
 
-**Using a remote MongoDB?** Pass the  `--databaseURI DATABASE_URI` parameter when starting `parse-server`. Learn more about configuring Parse Server [here](#configuration). For a full list of available options, run `parse-server --help`.
+**Using a remote MongoDB?** Pass the `--databaseURI DATABASE_URI` parameter when starting `parse-server`. Learn more about configuring Parse Server [here](#configuration). For a full list of available options, run `parse-server --help`.
 
 ### Saving and Querying Objects
 
-Now that you're running Parse Server, it is time to save your first object. The easiest way is to use the [REST API](http://docs.parseplatform.org/rest/guide), but you can easily do the same using any of the [Parse SDKs](http://parseplatform.org/#sdks). To learn more check out the [documentation](http://docs.parseplatform.org).
+Now that you're running Parse Server, it is time to save your first object. We'll use the [REST API](http://docs.parseplatform.org/rest/guide), but you can easily do the same using any of the [Parse SDKs](http://parseplatform.org/#sdks). Run the following:
+
+```bash
+$ curl -X POST \
+-H "X-Parse-Application-Id: APPLICATION_ID" \
+-H "Content-Type: application/json" \
+-d '{"score":1337,"playerName":"Sean Plott","cheatMode":false}' \
+http://localhost:1337/parse/classes/GameScore
+```
+
+You should get a response similar to this:
+
+```js
+{
+  "objectId": "2ntvSpRGIK",
+  "createdAt": "2016-03-11T23:51:48.050Z"
+}
+```
+
+You can now retrieve this object directly (make sure to replace `2ntvSpRGIK` with the actual `objectId` you received when the object was created):
+
+```bash
+$ curl -X GET \
+  -H "X-Parse-Application-Id: APPLICATION_ID" \
+  http://localhost:1337/parse/classes/GameScore/2ntvSpRGIK
+```
+
+```json
+// Response
+{
+  "objectId": "2ntvSpRGIK",
+  "score": 1337,
+  "playerName": "Sean Plott",
+  "cheatMode": false,
+  "updatedAt": "2016-03-11T23:51:48.050Z",
+  "createdAt": "2016-03-11T23:51:48.050Z"
+}
+```
+
+Keeping tracks of individual object ids is not ideal, however. In most cases you will want to run a query over the collection, like so:
+
+```bash
+$ curl -X GET \
+  -H "X-Parse-Application-Id: APPLICATION_ID" \
+  http://localhost:1337/parse/classes/GameScore
+```
+
+```json
+// The response will provide all the matching objects within the `results` array:
+{
+  "results": [
+    {
+      "objectId": "2ntvSpRGIK",
+      "score": 1337,
+      "playerName": "Sean Plott",
+      "cheatMode": false,
+      "updatedAt": "2016-03-11T23:51:48.050Z",
+      "createdAt": "2016-03-11T23:51:48.050Z"
+    }
+  ]
+}
+```
+
+To learn more about using saving and querying objects on Parse Server, check out the [Parse documentation](http://docs.parseplatform.org).
 
 ### Connect an SDK
 
@@ -229,7 +292,7 @@ const server = new ParseServer({
   appId: 'myAppId',
   masterKey: 'myMasterKey', // Keep this key secret!
   fileKey: 'optionalFileKey',
-  serverURL: 'http://localhost:1337/parse' // Don't forget to change to https if needed
+  serverURL: 'http://localhost:1337/parse', // Don't forget to change to https if needed
 });
 
 // Start server
@@ -286,10 +349,10 @@ For the full list of available options, run `parse-server --help` or take a look
 
 The client keys used with Parse are no longer necessary with Parse Server. If you wish to still require them, perhaps to be able to refuse access to older clients, you can set the keys at initialization time. Setting any of these keys will require all requests to provide one of the configured keys.
 
-* `clientKey`
-* `javascriptKey`
-* `restAPIKey`
-* `dotNetKey`
+- `clientKey`
+- `javascriptKey`
+- `restAPIKey`
+- `dotNetKey`
 
 ## Access Scopes
 
@@ -433,8 +496,8 @@ It’s possible to change the default pages of the app and redirect the user to 
 ```js
 const server = ParseServer({
   ...otherOptions,
-
-  customPages: {
+  
+  customPages {
     passwordResetSuccess: "http://yourapp.com/passwordResetSuccess",
     verifyEmailSuccess: "http://yourapp.com/verifyEmailSuccess",
     parseFrameURL: "http://yourapp.com/parseFrameURL",
@@ -739,18 +802,19 @@ The following parameter and placeholder keys are reserved because they are used 
 ## Logging
 
 Parse Server will, by default, log:
-* to the console
-* daily rotating files as new line delimited JSON
+
+- to the console
+- daily rotating files as new line delimited JSON
 
 Logs are also viewable in Parse Dashboard.
 
-**Want to log each request and response?** Set the `VERBOSE` environment variable when starting `parse-server`. Usage :-  `VERBOSE='1' parse-server --appId APPLICATION_ID --masterKey MASTER_KEY`
+**Want to log each request and response?** Set the `VERBOSE` environment variable when starting `parse-server`. Usage :- `VERBOSE='1' parse-server --appId APPLICATION_ID --masterKey MASTER_KEY`
 
 **Want logs to be placed in a different folder?** Pass the `PARSE_SERVER_LOGS_FOLDER` environment variable when starting `parse-server`. Usage :-  `PARSE_SERVER_LOGS_FOLDER='<path-to-logs-folder>' parse-server --appId APPLICATION_ID --masterKey MASTER_KEY`
 
-**Want to log specific levels?** Pass the `logLevel` parameter when starting `parse-server`. Usage :-  `parse-server --appId APPLICATION_ID --masterKey MASTER_KEY --logLevel LOG_LEVEL`
+**Want to log specific levels?** Pass the `logLevel` parameter when starting `parse-server`. Usage :- `parse-server --appId APPLICATION_ID --masterKey MASTER_KEY --logLevel LOG_LEVEL`
 
-**Want new line delimited JSON error logs (for consumption by CloudWatch, Google Cloud Logging, etc)?** Pass the `JSON_LOGS` environment variable when starting `parse-server`. Usage :-  `JSON_LOGS='1' parse-server --appId APPLICATION_ID --masterKey MASTER_KEY`
+**Want new line delimited JSON error logs (for consumption by CloudWatch, Google Cloud Logging, etc)?** Pass the `JSON_LOGS` environment variable when starting `parse-server`. Usage :- `JSON_LOGS='1' parse-server --appId APPLICATION_ID --masterKey MASTER_KEY`
 
 # Deprecations
 
@@ -780,7 +844,7 @@ $ parse-server --appId APPLICATION_ID --masterKey MASTER_KEY --databaseURI mongo
 
 After starting the server, you can visit http://localhost:1337/playground in your browser to start playing with your GraphQL API.
 
-***Note:*** Do ***NOT*** use --mountPlayground option in production. [Parse Dashboard](https://github.com/parse-community/parse-dashboard) has a built-in GraphQL Playground and it is the recommended option for production apps.
+**_Note:_** Do **_NOT_** use --mountPlayground option in production. [Parse Dashboard](https://github.com/parse-community/parse-dashboard) has a built-in GraphQL Playground and it is the recommended option for production apps.
 
 ### Using Docker
 
@@ -803,7 +867,7 @@ $ docker run --name my-parse-server --link my-mongo:mongo -v config-vol:/parse-s
 
 After starting the server, you can visit http://localhost:1337/playground in your browser to start playing with your GraphQL API.
 
-***Note:*** Do ***NOT*** use --mountPlayground option in production. [Parse Dashboard](https://github.com/parse-community/parse-dashboard) has a built-in GraphQL Playground and it is the recommended option for production apps.
+**_Note:_** Do **_NOT_** use --mountPlayground option in production. [Parse Dashboard](https://github.com/parse-community/parse-dashboard) has a built-in GraphQL Playground and it is the recommended option for production apps.
 
 ### Using Express.js
 
@@ -828,16 +892,13 @@ const parseServer = new ParseServer({
   appId: 'APPLICATION_ID',
   masterKey: 'MASTER_KEY',
   serverURL: 'http://localhost:1337/parse',
-  publicServerURL: 'http://localhost:1337/parse'
+  publicServerURL: 'http://localhost:1337/parse',
 });
 
-const parseGraphQLServer = new ParseGraphQLServer(
-  parseServer,
-  {
-    graphQLPath: '/graphql',
-    playgroundPath: '/playground'
-  }
-);
+const parseGraphQLServer = new ParseGraphQLServer(parseServer, {
+  graphQLPath: '/graphql',
+  playgroundPath: '/playground',
+});
 
 app.use('/parse', parseServer.app); // (Optional) Mounts the REST API
 parseGraphQLServer.applyGraphQL(app); // Mounts the GraphQL API
@@ -860,7 +921,7 @@ $ node index.js
 
 After starting the app, you can visit http://localhost:1337/playground in your browser to start playing with your GraphQL API.
 
-***Note:*** Do ***NOT*** mount the GraphQL Playground in production. [Parse Dashboard](https://github.com/parse-community/parse-dashboard) has a built-in GraphQL Playground and it is the recommended option for production apps.
+**_Note:_** Do **_NOT_** mount the GraphQL Playground in production. [Parse Dashboard](https://github.com/parse-community/parse-dashboard) has a built-in GraphQL Playground and it is the recommended option for production apps.
 
 ## Checking the API health
 
@@ -956,11 +1017,7 @@ Run the following to create your first object:
 ```graphql
 mutation CreateGameScore {
   createGameScore(
-    fields: {
-      playerName: "Sean Plott"
-      score: 1337
-      cheatMode: false
-    }
+    fields: { playerName: "Sean Plott", score: 1337, cheatMode: false }
   ) {
     id
     updatedAt

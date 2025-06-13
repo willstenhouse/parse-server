@@ -284,7 +284,7 @@ describe('rest create', () => {
   it('handles object and subdocument', done => {
     const obj = { subdoc: { foo: 'bar', wu: 'tan' } };
 
-    Parse.Cloud.beforeSave('MyClass', function () {
+    Parse.Cloud.beforeSave('MyClass', function() {
       // this beforeSave trigger should do nothing but can mess with the object
     });
 
@@ -437,7 +437,13 @@ describe('rest create', () => {
         });
       })
       .then(sessionAuth => {
-        return rest.update(config, sessionAuth, '_User', { objectId }, updatedData);
+        return rest.update(
+          config,
+          sessionAuth,
+          '_User',
+          { objectId },
+          updatedData
+        );
       })
       .then(() => {
         return Parse.User.logOut().then(() => {
@@ -1138,4 +1144,51 @@ describe('read-only masterKey', () => {
         done();
       });
   });
+});
+
+it('can use time base _id', done => {
+  config.objectIdSize = 8;
+  config.objectIdUseTime = true;
+  rest
+    .create(config, auth.nobody(config), 'Foo', {})
+    .then(() => database.adapter.find('Foo', { fields: {} }, {}, {}))
+    .then(results => {
+      expect(results.length).toEqual(1);
+      const obj = results[0];
+      expect(typeof obj.objectId).toEqual('string');
+      expect(obj.objectId.length).toEqual(16);
+      done();
+    });
+});
+
+it('can use custom _id prefix', done => {
+  config.objectIdPrefixes = {
+    Foo: 'foo_',
+  };
+  rest
+    .create(config, auth.nobody(config), 'Foo', {})
+    .then(() => database.adapter.find('Foo', { fields: {} }, {}, {}))
+    .then(results => {
+      expect(results.length).toEqual(1);
+      const obj = results[0];
+      expect(typeof obj.objectId).toEqual('string');
+      expect(obj.objectId.split('_')[0]).toEqual('foo');
+      done();
+    });
+});
+
+it('is compatible when _id prefix is set on another class', done => {
+  config.objectIdPrefixes = {
+    Bar: 'bar_',
+  };
+  rest
+    .create(config, auth.nobody(config), 'Foo', {})
+    .then(() => database.adapter.find('Foo', { fields: {} }, {}, {}))
+    .then(results => {
+      expect(results.length).toEqual(1);
+      const obj = results[0];
+      expect(typeof obj.objectId).toEqual('string');
+      expect(obj.objectId.length).toEqual(10);
+      done();
+    });
 });
